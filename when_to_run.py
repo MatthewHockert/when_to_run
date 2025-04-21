@@ -5,8 +5,26 @@ import os
 from datetime import datetime, timedelta
 
 api_key = os.getenv("WEATHER_API_KEY")
+default_latlon = os.getenv("LAT_LON")
+hide_email = os.getenv("EMAIL")
 API_KEY = api_key
-LAT, LON = 44.974323, -93.19316 
+
+
+def get_coords_from_city(city_name):
+    url = "https://nominatim.openstreetmap.org/search"
+    params = {
+        "q": city_name,
+        "format": "json",
+        "limit": 1
+    }
+    headers = {
+        "User-Agent": "when-to-run-app ({hide_email})"  
+    }
+    response = requests.get(url, params=params, headers=headers)
+    data = response.json()
+    if not data:
+        return None
+    return float(data[0]['lat']), float(data[0]['lon'])
 
 ideal_temp = (45, 65)
 max_humidity = 70
@@ -18,8 +36,16 @@ def get_day(day):
     else:
         return 1
 
-def get_weather(day):
+def get_weather(day,location):
     day_i = get_day(day)
+    if location:
+        coords = get_coords_from_city(location)
+        if coords is None:
+            raise ValueError(f"Could not find coordinates for city: {location}")
+    else:
+        coords = map(float, default_latlon.split(","))
+
+    LAT, LON = coords   
     url = f"http://api.weatherapi.com/v1/forecast.json?key={API_KEY}&q={LAT},{LON}&days=2&aqi=no&alerts=no"
     response = requests.get(url).json()
     forecast = response['forecast']['forecastday'][day_i]['hour']
@@ -41,6 +67,8 @@ def score_hour(run_type,hour):
     wind = hour['wind_mph']
     dt = datetime.strptime(hour['time'], '%Y-%m-%d %H:%M')
     # print(f"print raw precip {precip}")
+
+    # arbitrary scoring for now.
     score = 100
     if not (ideal_temp[0] <= temp <= ideal_temp[1]):
         score -= abs(temp - sum(ideal_temp) / 2)
@@ -65,8 +93,8 @@ def score_hour(run_type,hour):
         'wind_mph': wind
     }
     
-def find_best_time(run_type,day):
-    forecast = get_weather(day)
+def find_best_time(run_type,day,location):
+    forecast = get_weather(day,location)
     hourly_scores = [
         score_hour(run_type,hour)
         for hour in forecast
@@ -74,7 +102,7 @@ def find_best_time(run_type,day):
     ]
     df = pd.DataFrame(hourly_scores)
     best = df.sort_values(by='score', ascending=False).head(3)
-    print(f" The top three best times to run are: {best}")
+    print(f" The top three best times to run are: ")
     print(best.to_string(index=False))
 
 
@@ -90,8 +118,10 @@ if __name__ == "__main__":
 
     parser.add_argument("-r","--run_type", type=str,required=True, choices=run_types)
     parser.add_argument("-d","--day", type=str,required=True, choices=day_choices)
+    parser.add_argument("-l","--location", type=str,required=False)
+
 
     args = parser.parse_args()
 
-    find_best_time(args.run_type,args.day)
+    find_best_time(args.run_type,args.day,args.location)
     # Testing commits
