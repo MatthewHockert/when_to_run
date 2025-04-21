@@ -94,3 +94,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     find_best_time(args.run_type,args.day)
+    # Testing commits
