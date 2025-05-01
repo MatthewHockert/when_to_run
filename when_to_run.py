@@ -26,10 +26,6 @@ def get_coords_from_city(city_name):
         return None
     return float(data[0]['lat']), float(data[0]['lon'])
 
-ideal_temp = (45, 65)
-max_humidity = 70
-max_precip = 20
-
 def get_day(day):
     if day == "today":
         return 0
@@ -58,13 +54,39 @@ def get_weather(day,location):
 
     return forecast
 
+def get_season(date):
+    Y = 2000  # dummy leap year to cover Feb 29
+    spring = (datetime(Y, 3, 1), datetime(Y, 6, 1))
+    summer = (datetime(Y, 6, 2), datetime(Y, 9, 1))
+    fall = (datetime(Y, 9, 2), datetime(Y, 12, 1))
+    winter = (datetime(Y, 1, 1), datetime(Y, 2, 29)), (datetime(Y, 12, 2), datetime(Y, 12, 31))
+
+    date = date.replace(year=Y)
+
+    if spring[0] <= date <= spring[1]:
+        return 'spring'
+    elif summer[0] <= date <= summer[1]:
+        return 'summer'
+    elif fall[0] <= date <= fall[1]:
+        return 'fall'
+    elif winter[0][0] <= date <= winter[0][1] or winter[1][0] <= date <= winter[1][1]:
+        return 'winter'
+
+now = datetime.now()
+season = get_season(now)
+
+ideal_temp = (45, 65)
+max_humidity = 70
+max_precip = 20
+best_uv = 6
+
 def score_hour(run_type,hour):
-    # print(entry)
     temp = hour['temp_f']
     humidity = hour['humidity']
     dew_point = hour.get('dewpoint_f', 0)
     precip = hour.get('chance_of_rain', 0)
     wind = hour['wind_mph']
+    uv = hour['uv']
     dt = datetime.strptime(hour['time'], '%Y-%m-%d %H:%M')
     # print(f"print raw precip {precip}")
 
@@ -74,6 +96,18 @@ def score_hour(run_type,hour):
         score -= abs(temp - sum(ideal_temp) / 2)
     if humidity > max_humidity:
         score -= (humidity - max_humidity) * 0.5
+    if season == 'summer':
+        if uv > 5:
+            score -= (uv - 5) * 2
+    elif season == 'spring':
+        if uv < 4:
+            score -= (4 - uv) * 1.5
+    elif season == 'winter':
+        if uv < 2:
+            score -= (2 - uv) * 1.5
+    elif season == 'fall':
+        if uv < 4:
+            score -= (4 - uv) * 1.5
     if dew_point > 65:
         score -= (dew_point - 65) * 1.2    
     if precip > max_precip:
@@ -90,7 +124,8 @@ def score_hour(run_type,hour):
         'humidity': humidity,
         'dew_point': dew_point,
         'precip_chance': precip,
-        'wind_mph': wind
+        'wind_mph': wind,
+        'UV': uv
     }
     
 def find_best_time(run_type,day,location):
